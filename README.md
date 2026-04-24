@@ -21,6 +21,21 @@
 
 ---
 
+## 📸 界面展示 (Screenshots)
+
+在这里你可以直观地感受到经过像素级打磨的平台质感：
+
+|<div align="center">🔮 Agentic 工作流平台主页</div>|<div align="center">💻 Thinking 思维链执行流</div>|
+|:---:|:---:|
+|<img src="docs/screenshots/home.png" width="400" alt="Home UI Placeholder" />|
+
+|<div align="center">🔧 MCP 全局工具池</div>|<div align="center">📈 控制台与实时大盘</div>|
+|:---:|:---:|
+|<img src="docs/screenshots/mcp.png" width="400" alt="MCP Manager Placeholder" />|<img src="docs/screenshots/admin.png" width="400" alt="Admin Dashboard Placeholder" />|
+
+
+---
+
 ## 🛠️ 技术栈 (Tech Stack)
 
 ### 前端 (Client)
