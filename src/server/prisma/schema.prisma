@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id          String   @id @default(uuid())
+  account     String   @unique // 支持存储邮箱、手机或用户名
+  displayName String?  // 姓名或昵称
+  avatar      String?  // 用户头像链接
+  password    String
+  role        String   @default("USER") // "USER" or "ADMIN"
+  createdAt   DateTime @default(now())
+}
+
+model Project {
+  id        String   @id @default(uuid())
+  title     String
+  content   String?
+  userId    String   @default("anonymous")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MCPToolPlugin {
+  id            String   @id @default(uuid())
+  serverName    String
+  command       String
+  args          String   // Stored as JSON string
+  enabled       Boolean  @default(true)
+}
+
+model AIModel {
+  id          String   @id @default(uuid())
+  name        String   // 管理员自定义的显示名称
+  modelId     String   @default("") // 真实模型标识符，如 gpt-4o, qwen-turbo
+  baseUrl     String   // 模型请求地址
+  apiKey      String   // Secret Key
+  temperature Float    @default(0.7)
+  maxTokens   Int      @default(2048)
+  topP        Float    @default(1.0)
+  isEnabled   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

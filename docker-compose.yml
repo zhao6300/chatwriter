@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  agentic-writer:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: agentic_ai_writer
+    ports:
+      - "3000:3000"   # Backend Express API Port
+      - "5173:5173"   # Frontend Vite UI Port
+    # volumes:
+    #   - ./:/app
+    #   - /app/node_modules
+    #   - /app/src/client/node_modules
+    #   - /app/src/server/node_modules
+    environment:
+      - NODE_ENV=development
+    restart: unless-stopped

@@ -1,0 +1,16 @@
+{
+  "name": "ai-copywriter-root",
+  "version": "1.0.0",
+  "description": "智能文案平台 - 纯React前端与Express后台",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
+    "dev:client": "cd src/client && npm run dev",
+    "dev:server": "cd src/server && npm run dev",
+    "install:all": "npm install && cd src/client && npm install && cd ../server && npm install",
+    "db:push": "cd src/server && npm run db:push",
+    "db:studio": "cd src/server && npm run db:studio"
+  },
+  "devDependencies": {
+    "concurrently": "latest"
+  }
+}

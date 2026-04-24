@@ -1,0 +1,30 @@
+{
+  "name": "ai-copywriter-server",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "npx prisma generate && ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc",
+    "db:push": "npx prisma db push",
+    "db:generate": "npx prisma generate",
+    "db:studio": "npx prisma studio"
+  },
+  "prisma": {
+    "schema": "prisma/schema.prisma"
+  },
+  "dependencies": {
+    "express": "latest",
+    "cors": "latest",
+    "multer": "latest",
+    "@prisma/client": "^5"
+  },
+  "devDependencies": {
+    "@types/express": "latest",
+    "@types/cors": "latest",
+    "@types/multer": "latest",
+    "@types/node": "latest",
+    "prisma": "^5",
+    "ts-node-dev": "latest",
+    "typescript": "latest"
+  }
+}
