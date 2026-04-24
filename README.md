@@ -27,7 +27,7 @@
 
 |<div align="center">🔮 Agentic 工作流平台主页</div>|<div align="center">💻 Thinking 思维链执行流</div>|
 |:---:|:---:|
-|<img src="docs/screenshots/home.png" width="400" alt="Home UI Placeholder" />|
+|<img src="docs/screenshots/home.png" width="400" alt="Home UI Placeholder" />|<img src="docs/screenshots/thinking.png" width="400" alt="Thinking Mode Placeholder" />|
 
 |<div align="center">🔧 MCP 全局工具池</div>|<div align="center">📈 控制台与实时大盘</div>|
 |:---:|:---:|
