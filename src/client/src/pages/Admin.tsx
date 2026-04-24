@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Trash2, Save, ChevronDown, ChevronUp, Plus, Activity, Cpu, Users, FileText } from "lucide-react";
+import { Trash2, Save, ChevronDown, ChevronUp, Plus, Activity, Cpu, Users, FileText, Database } from "lucide-react";
 
 interface SystemStats {
   userCount: number;
@@ -14,6 +14,7 @@ interface UserInfo {
   role: string;
   createdAt: string;
   projectCount: number;
+  kbCount: number;
 }
 
 interface ModelConfig {
@@ -34,9 +35,11 @@ export default function AdminDashboard() {
   const [showAdd, setShowAdd] = useState(false);
   const [newModel, setNewModel] = useState({ name: '', modelId: '', url: '', sk: '', temperature: 0.7, maxTokens: 2048, topP: 1.0 });
 
-  const [activeTab, setActiveTab] = useState<'models' | 'system'>('system');
+  const [activeTab, setActiveTab] = useState<'models' | 'system' | 'vector'>('system');
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [users, setUsers] = useState<UserInfo[]>([]);
+  const [vectorConfig, setVectorConfig] = useState<any>({ vectorDbType: 'pinecone', vectorDbUrl: '', vectorDbApiKey: '', embeddingModel: 'text-embedding-3-small', embeddingApiKey: '' });
+  const [savingVector, setSavingVector] = useState(false);
 
   const fetchSystemInfo = async () => {
     try {
@@ -47,6 +50,12 @@ export default function AdminDashboard() {
       const usersRes = await fetch('/api/admin/users');
       const usersData = await usersRes.json();
       if (usersData.success) setUsers(usersData.users);
+
+      const vecRes = await fetch('/api/admin/system_config');
+      const vecData = await vecRes.json();
+      if (vecData.success && vecData.config) {
+         setVectorConfig(vecData.config);
+      }
     } catch (err) { console.error(err); }
   };
 
@@ -114,7 +123,21 @@ export default function AdminDashboard() {
     }));
   };
 
-  const labelStyle: React.CSSProperties = { fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px', display: 'block' };
+  const handleUpdateVectorConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingVector(true);
+    try {
+      await fetch('/api/admin/system_config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(vectorConfig)
+      });
+      alert('向量引擎配置已持久化！');
+    } catch (err) { console.error(err); }
+    setSavingVector(false);
+  };
+
+  const labelStyle: React.CSSProperties = { fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' };
   const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 14px', fontSize: '0.9rem', borderRadius: '8px', background: 'var(--theme-input-bg, rgba(255,255,255,0.04))', border: '1px solid var(--panel-border)', color: 'var(--text-primary)', outline: 'none' };
   const sliderRow: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '12px' };
   const sliderLabel: React.CSSProperties = { fontSize: '0.85rem', color: 'var(--text-secondary)', minWidth: '50px', textAlign: 'right' };
@@ -144,6 +167,12 @@ export default function AdminDashboard() {
             style={{ padding: '8px 24px', borderRadius: '8px', border: 'none', background: activeTab === 'models' ? 'var(--accent)' : 'transparent', color: activeTab === 'models' ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600, fontSize: '0.95rem', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}
           >
             <Cpu size={16} /> AI 模型挂载
+          </button>
+          <button 
+            onClick={() => setActiveTab('vector')} 
+            style={{ padding: '8px 24px', borderRadius: '8px', border: 'none', background: activeTab === 'vector' ? 'var(--accent)' : 'transparent', color: activeTab === 'vector' ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600, fontSize: '0.95rem', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <Database size={16} /> 向量引擎驱动
           </button>
        </div>
 
@@ -178,6 +207,7 @@ export default function AdminDashboard() {
                        <th style={{ padding: '12px', borderBottom: '1px solid var(--panel-border)', fontWeight: 500, color: 'var(--text-muted)' }}>昵称</th>
                        <th style={{ padding: '12px', borderBottom: '1px solid var(--panel-border)', fontWeight: 500, color: 'var(--text-muted)' }}>权限角色</th>
                        <th style={{ padding: '12px', borderBottom: '1px solid var(--panel-border)', fontWeight: 500, color: 'var(--text-muted)' }}>产出文档数</th>
+                       <th style={{ padding: '12px', borderBottom: '1px solid var(--panel-border)', fontWeight: 500, color: 'var(--text-muted)' }}>知识库数</th>
                        <th style={{ padding: '12px', borderBottom: '1px solid var(--panel-border)', fontWeight: 500, color: 'var(--text-muted)' }}>注册时间</th>
                      </tr>
                    </thead>
@@ -192,6 +222,7 @@ export default function AdminDashboard() {
                            </span>
                          </td>
                          <td style={{ padding: '12px', fontSize: '0.95rem', fontWeight: 600, color: u.projectCount > 0 ? '#10b981' : 'var(--text-muted)' }}>{u.projectCount} 篇</td>
+                         <td style={{ padding: '12px', fontSize: '0.95rem', fontWeight: 600, color: u.kbCount > 0 ? 'var(--accent)' : 'var(--text-muted)' }}>{u.kbCount || 0} 个</td>
                          <td style={{ padding: '12px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{new Date(u.createdAt).toLocaleString('zh-CN')}</td>
                        </tr>
                      ))}
@@ -345,6 +376,55 @@ export default function AdminDashboard() {
          </div>
          </div>
        )}
+
+       {activeTab === 'vector' && (
+         <div className="animate-fade-in glass-panel" style={{ padding: '32px' }}>
+            <h3 style={{ fontSize: '1.2rem', marginBottom: '8px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+               <Database size={20} /> 全局 RAG 向量引擎管线 (Embedding & Vector DB)
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '24px' }}>平台级外部知识摄入核心。配置挂载后，用户方可创建个人知识库上传文件提取特征。</p>
+            
+            <form onSubmit={handleUpdateVectorConfig} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  <div>
+                    <label style={labelStyle}>向量数据库阵列 (Vector DB Type)</label>
+                    <select style={inputStyle} value={vectorConfig.vectorDbType || 'pinecone'} onChange={e => setVectorConfig({...vectorConfig, vectorDbType: e.target.value})}>
+                      <option value="pinecone">Pinecone Serverless</option>
+                      <option value="chroma">Chroma (Remote)</option>
+                      <option value="milvus">Milvus / Zilliz</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Embedding 大模型 (如 OpenAI text-embedding-3)</label>
+                    <input style={inputStyle} value={vectorConfig.embeddingModel || ''} onChange={e => setVectorConfig({...vectorConfig, embeddingModel: e.target.value})} placeholder="text-embedding-3-small" />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  <div>
+                    <label style={labelStyle}>集群接入端点 (API URL / Endpoint)</label>
+                    <input style={inputStyle} value={vectorConfig.vectorDbUrl || ''} onChange={e => setVectorConfig({...vectorConfig, vectorDbUrl: e.target.value})} placeholder="https://idx-....svc.pinecone.io" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>连接密钥 (API Key / Token)</label>
+                    <input style={inputStyle} type="password" value={vectorConfig.vectorDbApiKey || ''} onChange={e => setVectorConfig({...vectorConfig, vectorDbApiKey: e.target.value})} placeholder="****" />
+                  </div>
+                </div>
+                
+                <div>
+                   <label style={labelStyle}>Embedding 服务独立 API Key (留空与 LLM 对齐)</label>
+                   <input style={inputStyle} type="password" value={vectorConfig.embeddingApiKey || ''} onChange={e => setVectorConfig({...vectorConfig, embeddingApiKey: e.target.value})} placeholder="sk-..." />
+                </div>
+
+                <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+                   <button type="submit" disabled={savingVector} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '8px', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px', opacity: savingVector ? 0.7 : 1 }}>
+                     <Save size={18} /> {savingVector ? '写入中...' : '持久化覆盖管线配置'}
+                   </button>
+                </div>
+            </form>
+         </div>
+       )}
+
        </div>
     </main>
   );

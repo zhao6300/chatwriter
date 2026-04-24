@@ -262,6 +262,36 @@ app.delete('/api/tools/:id', async (req, res) => {
 });
 
 // ============================================
+// Vector DB Global Config (Admin)
+// ============================================
+
+app.get('/api/admin/system_config', async (req, res) => {
+    try {
+        let config = await prisma.systemGlobalConfig.findUnique({ where: { id: 'global-config-1' } });
+        if (!config) {
+            config = await prisma.systemGlobalConfig.create({ data: { id: 'global-config-1' } });
+        }
+        res.json({ success: true, config });
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/admin/system_config', async (req, res) => {
+    try {
+        const data = req.body;
+        const config = await prisma.systemGlobalConfig.upsert({
+            where: { id: 'global-config-1' },
+            create: { id: 'global-config-1', ...data },
+            update: data
+        });
+        res.json({ success: true, config });
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ============================================
 // System Admin Details Endpoints
 // ============================================
 app.get('/api/admin/users', async (req, res) => {
@@ -271,12 +301,15 @@ app.get('/api/admin/users', async (req, res) => {
             orderBy: { createdAt: 'desc' }
         });
         
-        // Count projects per user based on account string
+        // Count projects and knowledge bases per user based on account string
         const usersWithCounts = await Promise.all(users.map(async (user) => {
             const projectCount = await prisma.project.count({
                 where: { userId: user.account }
             });
-            return { ...user, projectCount };
+            const kbCount = await prisma.knowledgeBase.count({
+                where: { userId: user.account }
+            });
+            return { ...user, projectCount, kbCount };
         }));
 
         res.json({ success: true, users: usersWithCounts });
@@ -437,6 +470,91 @@ app.post('/api/chat', async (req, res) => {
     } catch (error: any) {
         console.error(error);
         res.json({ status: "success", message: '服务端调用外部模型接口时出现错误。' });
+    }
+});
+
+// ============================================
+// Knowledge Base & RAG Endpoints
+// ============================================
+
+// Get user Knowledge Bases
+app.get('/api/knowledge', async (req, res) => {
+    try {
+        const userId = req.query.userId as string;
+        if (!userId) return res.status(400).json({ success: false, error: 'User ID is required' });
+        
+        const knowledgeBases = await prisma.knowledgeBase.findMany({
+            where: { userId },
+            orderBy: { createdAt: 'desc' },
+            include: { _count: { select: { documents: true } } }
+        });
+        res.json({ success: true, knowledgeBases });
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Create Knowledge Base
+app.post('/api/knowledge', async (req, res) => {
+    try {
+        const { name, description, userId, isPublic } = req.body;
+        if (!name || !userId) return res.status(400).json({ success: false, error: 'Name and userId are required' });
+        
+        const kb = await prisma.knowledgeBase.create({
+            data: { name, description, userId, isPublic: isPublic || false }
+        });
+        res.json({ success: true, kb });
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Delete Knowledge Base
+app.delete('/api/knowledge/:id', async (req, res) => {
+    try {
+        await prisma.knowledgeBase.delete({ where: { id: req.params.id } });
+        res.json({ success: true });
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Get Documents inside a Knowledge Base
+app.get('/api/knowledge/:id/documents', async (req, res) => {
+    try {
+        const documents = await prisma.knowledgeDocument.findMany({
+            where: { kbId: req.params.id },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json({ success: true, documents });
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Upload Document to Knowledge Base (Simulated RAG Ingestion)
+app.post('/api/knowledge/:id/documents', async (req, res) => {
+    try {
+        const { name, content } = req.body;
+        const kbId = req.params.id;
+        
+        // Setup initial state
+        const doc = await prisma.knowledgeDocument.create({
+            data: { kbId, name, content, status: 'PROCESSING', chunkCount: 0 }
+        });
+        
+        // Mock async background processing (chunking + embedding logic would go here)
+        setTimeout(async () => {
+             // Fake 10-chunk generation
+             await prisma.knowledgeDocument.update({
+                 where: { id: doc.id },
+                 data: { status: 'DONE', chunkCount: Math.floor(Math.random() * 20) + 1 }
+             });
+        }, 3000);
+        
+        res.json({ success: true, doc });
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

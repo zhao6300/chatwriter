@@ -47,3 +47,35 @@ model AIModel {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+model SystemGlobalConfig {
+  id               String   @id @default("global-config-1")
+  vectorDbType     String   @default("pinecone") // pinecone, chroma, milvus, local
+  vectorDbUrl      String   @default("")
+  vectorDbApiKey   String   @default("")
+  embeddingModel   String   @default("text-embedding-3-small")
+  embeddingApiKey  String   @default("")
+  updatedAt        DateTime @updatedAt
+}
+
+model KnowledgeBase {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  userId      String   // Map to User.account
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  documents   KnowledgeDocument[]
+}
+
+model KnowledgeDocument {
+  id             String         @id @default(uuid())
+  name           String
+  content        String?
+  status         String         @default("IDLE") // PROCESSING, DONE, FAILED
+  chunkCount     Int            @default(0)
+  kbId           String
+  knowledgeBase  KnowledgeBase  @relation(fields: [kbId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+}

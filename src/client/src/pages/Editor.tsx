@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useContext } from "react";
 import { useParams, useLocation, Link, useNavigate } from "react-router-dom";
 import MDEditor from '@uiw/react-md-editor';
-import { ArrowLeft, Check, X, Paperclip, FileImage, FileText, Trash2, User, ChevronDown, ChevronRight, ChevronUp, BrainCircuit, Menu } from 'lucide-react';
+import { ArrowLeft, Check, X, Paperclip, FileImage, FileText, Trash2, User, ChevronDown, ChevronRight, ChevronUp, BrainCircuit, Menu, Waypoints, Rocket, Library } from 'lucide-react';
 import { ProfileContext } from '../App';
 
 // Parse structured diff blocks from AI response
@@ -192,9 +192,13 @@ export default function Editor() {
   
   const [chatInput, setChatInput] = useState("");
   const [selectedText, setSelectedText] = useState("");
-  const [isThinkingMode, setIsThinkingMode] = useState(false);
+  const [runMode, setRunMode] = useState<'fast' | 'thinking' | 'planning'>('fast');
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [chatLogs, setChatLogs] = useState<{role: string, content: string, action?: string}[]>([]);
+  
+  const [userKbs, setUserKbs] = useState<any[]>([]);
+  const [selectedKbId, setSelectedKbId] = useState("");
+  const [kbMenuOpen, setKbMenuOpen] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const hasGeneratedRef = useRef(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -377,6 +381,15 @@ export default function Editor() {
         }
       })
       .catch(e => console.error(e));
+
+    // Fetch user knowledge bases
+    const account = localStorage.getItem('authAccount');
+    if (account) {
+       fetch(`/api/knowledge?userId=${encodeURIComponent(account)}`)
+         .then(r => r.json())
+         .then(d => { if (d.success) setUserKbs(d.knowledgeBases); })
+         .catch(() => {});
+    }
   }, []);
 
   // Core streaming function
@@ -529,18 +542,42 @@ export default function Editor() {
       ? `\n\n用户附带了以下参考文件：\n${attachments.map(a => `- ${a.name} (${a.type}, ${(a.size / 1024).toFixed(1)}KB)`).join('\n')}\n请参考这些文件内容来完成用户的要求。`
       : '';
 
-    const thinkContext = isThinkingMode
-      ? `\n\n【重要要求！！！】当前已经启用了「深度思考模式」。在回答前，你必须先进行多步骤的深度推理，并将推理过程完整地放置在回复的最开头，并使用 <think> 和 </think> 标签包裹。思考完毕后，再输出最终的修改块结果。`
-      : '';
+    let modeContext = '';
+    if (runMode === 'thinking') {
+       modeContext = `\n\n【重要要求！！！】当前已经启用了「深度思考模式」。在回答前，你必须先进行多步骤的深度推理，并将推理过程完整地放置在回复的最开头，并使用 <think> 和 </think> 标签包裹。思考完毕后，再输出最终的修改块结果。`;
+    } else if (runMode === 'planning') {
+       modeContext = `\n\n【严格规划模式要求！！！】当前为「深度架构与修改规划」模式。你必须严格按照以下两步执行：
+第一步：先通过搜索和比对，准确【定位】到需要修改的原始代码/文本位置。然后在内部输出你的【分析思考和详细修改计划】，该排查与计划块必须由 \`<think>\` 标签完整包裹返回。
+第二步：在彻底梳理完修改范围和计划后（标签闭合后），你才会在最后开始执行最终指令效果，按标准 <<<FIND>>> <<<REPLACE>>> 格式逐段输出结果！强行禁止无计划直接修改。`;
+    }
 
     const selectionContext = selectedText 
       ? `\n\n【🎯 强制执行范围：用户当前高亮选中了以下段落】\n\`\`\`\n${selectedText}\n\`\`\`\n请你**必须仅针对这段被选中的文本**执行指令。对于非选中的其余部分，绝不能做出除错别字外的任何修改！在返回结果时，<<<FIND>>> 块内的原文应当精确来源于（或等于）这一段选中文本。`
       : '';
 
+    // Knowledge base context
+    let kbContext = '';
+    if (selectedKbId) {
+       const selectedKb = userKbs.find(k => k.id === selectedKbId);
+       if (selectedKb) {
+          try {
+            const kbRes = await fetch(`/api/knowledge/${selectedKbId}/documents`);
+            const kbData = await kbRes.json();
+            if (kbData.success && kbData.documents.length > 0) {
+               const docSnippets = kbData.documents
+                 .filter((d: any) => d.content)
+                 .map((d: any) => `【${d.name}】:\n${(d.content || '').substring(0, 2000)}`)
+                 .join('\n\n---\n\n');
+               kbContext = `\n\n【📚 知识库参考资料 —— ${selectedKb.name}】\n以下是用户挂载的知识库中的相关文档内容，请在回答时参考这些资料：\n\n${docSnippets}`;
+            }
+          } catch (err) { console.error(err); }
+       }
+    }
+
     const messages = [
       { role: 'system' as const, content: `你是文案专家。当前文档内容如下：
 
-${cleanDoc}${attachmentContext}${selectionContext}${thinkContext}
+${cleanDoc}${attachmentContext}${selectionContext}${kbContext}${modeContext}
 
 用户接下来会给你修改指令。请只输出需要修改的部分，使用以下严格格式：
 
@@ -854,6 +891,15 @@ ${cleanDoc}${attachmentContext}${selectionContext}${thinkContext}
              </div>
           )}
 
+          {/* Knowledge Base Selection Pill */}
+          {selectedKbId && (
+             <div className="animate-fade-in" style={{ padding: '6px 10px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '8px', fontSize: '0.75rem', color: '#10b981', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Library size={13} />
+                <span style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userKbs.find(k => k.id === selectedKbId)?.name || '未知'}</span>
+                <button type="button" onClick={() => setSelectedKbId('')} style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', padding: '0', display: 'flex', marginLeft: '2px' }}><X size={12} /></button>
+             </div>
+          )}
+
           <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '12px', border: '1px solid var(--panel-border)', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {/* Layer 1: Input text wrapper */}
             <input 
@@ -879,16 +925,64 @@ ${cleanDoc}${attachmentContext}${selectionContext}${thinkContext}
                     <Paperclip size={14} />
                   </button>
 
+                  {/* Knowledge Base Selector */}
+                  {userKbs.length > 0 && (
+                     <div style={{ position: 'relative' }}>
+                        <button
+                           type="button"
+                           onClick={() => setKbMenuOpen(!kbMenuOpen)}
+                           style={{ background: selectedKbId ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${selectedKbId ? 'rgba(16,185,129,0.4)' : 'var(--panel-border)'}`, color: selectedKbId ? '#10b981' : 'var(--text-muted)', cursor: 'pointer', padding: '6px 10px', borderRadius: '6px', display: 'flex', alignItems: 'center', transition: 'all 0.2s' }}
+                           title={selectedKbId ? `已选：${userKbs.find((k: any) => k.id === selectedKbId)?.name}` : '选择知识库'}
+                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = selectedKbId ? 'rgba(16,185,129,0.25)' : 'rgba(255,255,255,0.1)'; }}
+                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = selectedKbId ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)'; }}
+                        >
+                           <Library size={14} />
+                        </button>
+
+                        {kbMenuOpen && (
+                           <>
+                              <div style={{ position: 'fixed', inset: 0, zIndex: 90 }} onClick={() => setKbMenuOpen(false)} />
+                              <div className="animate-fade-in" style={{ position: 'absolute', bottom: 'calc(100% + 8px)', left: 0, background: 'rgba(15,20,25,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', padding: '8px', zIndex: 100, minWidth: '200px', maxWidth: '280px', maxHeight: '240px', overflowY: 'auto', boxShadow: '0 8px 30px rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)' }}>
+                                 <div style={{ padding: '4px 8px 8px', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>选择知识库</div>
+                                 <div
+                                    onClick={() => { setSelectedKbId(''); setKbMenuOpen(false); }}
+                                    style={{ padding: '8px 12px', fontSize: '0.85rem', color: !selectedKbId ? '#10b981' : 'var(--text-secondary)', cursor: 'pointer', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.15s', background: !selectedKbId ? 'rgba(16,185,129,0.08)' : 'transparent' }}
+                                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'}
+                                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = !selectedKbId ? 'rgba(16,185,129,0.08)' : 'transparent'}
+                                 >
+                                    不使用知识库
+                                    {!selectedKbId && <Check size={14} />}
+                                 </div>
+                                 <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '4px 0' }} />
+                                 {userKbs.map((kb: any) => (
+                                    <div
+                                       key={kb.id}
+                                       onClick={() => { setSelectedKbId(kb.id); setKbMenuOpen(false); }}
+                                       style={{ padding: '8px 12px', fontSize: '0.85rem', color: selectedKbId === kb.id ? '#10b981' : 'var(--text-secondary)', cursor: 'pointer', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', transition: 'background 0.15s', background: selectedKbId === kb.id ? 'rgba(16,185,129,0.08)' : 'transparent' }}
+                                       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'}
+                                       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = selectedKbId === kb.id ? 'rgba(16,185,129,0.08)' : 'transparent'}
+                                    >
+                                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{kb.name}</span>
+                                       {selectedKbId === kb.id && <Check size={14} style={{ flexShrink: 0 }} />}
+                                    </div>
+                                 ))}
+                              </div>
+                           </>
+                        )}
+                     </div>
+                  )}
+
                   <div style={{ position: 'relative' }}>
                      <button
                         type="button" 
                         onClick={() => setModeMenuOpen(!modeMenuOpen)} 
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--panel-border)', padding: '6px 10px', borderRadius: '6px', color: isThinkingMode ? 'var(--accent)' : 'var(--text-muted)', fontSize: '0.8rem', cursor: 'pointer', transition: 'all 0.2s' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'; }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px', background: runMode !== 'fast' ? 'rgba(59,130,246,0.12)' : 'rgba(255,255,255,0.05)', border: `1px solid ${runMode !== 'fast' ? 'rgba(59,130,246,0.35)' : 'var(--panel-border)'}`, padding: '6px 10px', borderRadius: '6px', color: runMode !== 'fast' ? 'var(--accent)' : 'var(--text-muted)', fontSize: '0.8rem', cursor: 'pointer', transition: 'all 0.2s' }}
+                        title={runMode === 'thinking' ? '思考模式' : runMode === 'planning' ? '规划模式' : '快速模式'}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = runMode !== 'fast' ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.1)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = runMode !== 'fast' ? 'rgba(59,130,246,0.12)' : 'rgba(255,255,255,0.05)'; }}
                      >
-                        {isThinkingMode ? <><BrainCircuit size={14}/> 思考模式</> : '快速模式'}
-                        <ChevronUp size={14} />
+                        {runMode === 'thinking' ? <BrainCircuit size={14}/> : runMode === 'planning' ? <Waypoints size={14}/> : <Rocket size={14}/>}
+                        <ChevronUp size={12} />
                      </button>
 
                      {modeMenuOpen && (
@@ -896,20 +990,33 @@ ${cleanDoc}${attachmentContext}${selectionContext}${thinkContext}
                            <div style={{ position: 'fixed', inset: 0, zIndex: 90 }} onClick={() => setModeMenuOpen(false)} />
                            <div className="animate-fade-in" style={{ position: 'absolute', bottom: 'calc(100% + 8px)', left: 0, background: 'rgba(15,20,25,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '6px', zIndex: 100, minWidth: '140px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)' }}>
                                <div 
-                                 onClick={() => { setIsThinkingMode(false); setModeMenuOpen(false); }} 
-                                 style={{ padding: '8px 12px', fontSize: '0.85rem', color: !isThinkingMode ? 'var(--accent)' : 'var(--text-primary)', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.2s' }}
-                                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
-                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                 onClick={() => { setRunMode('fast'); setModeMenuOpen(false); }} 
+                                 style={{ padding: '8px 12px', fontSize: '0.85rem', color: runMode === 'fast' ? 'var(--text-primary)' : 'var(--text-secondary)', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.2s' }}
+                                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)' }}
+                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                                >
-                                  快速模式 {!isThinkingMode && <Check size={14} />}
+                                  <span>🚀 快速模式</span>
+                                  {runMode === 'fast' && <Check size={14} color="var(--accent)" />}
                                </div>
+                               <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
                                <div 
-                                 onClick={() => { setIsThinkingMode(true); setModeMenuOpen(false); }} 
-                                 style={{ padding: '8px 12px', fontSize: '0.85rem', color: isThinkingMode ? 'var(--accent)' : 'var(--text-primary)', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.2s' }}
-                                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
-                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                 onClick={() => { setRunMode('thinking'); setModeMenuOpen(false); }} 
+                                 style={{ padding: '8px 12px', fontSize: '0.85rem', color: runMode === 'thinking' ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.2s' }}
+                                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)' }}
+                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                                >
-                                  <span style={{display: 'flex', alignItems: 'center', gap: '6px'}}><BrainCircuit size={14}/> 思考模式</span> {isThinkingMode && <Check size={14} />}
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><BrainCircuit size={14} /> 思考模式</span>
+                                  {runMode === 'thinking' && <Check size={14} color="var(--accent)" />}
+                               </div>
+                               <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+                               <div 
+                                 onClick={() => { setRunMode('planning'); setModeMenuOpen(false); }} 
+                                 style={{ padding: '8px 12px', fontSize: '0.85rem', color: runMode === 'planning' ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.2s' }}
+                                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)' }}
+                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                               >
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Waypoints size={14} /> 规划模式</span>
+                                  {runMode === 'planning' && <Check size={14} color="var(--accent)" />}
                                </div>
                            </div>
                         </>

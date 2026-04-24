@@ -7,6 +7,7 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import AdminDashboard from './pages/Admin';
 import Tools from './pages/Tools';
+import KnowledgeBase from './pages/KnowledgeBase';
 
 export const ProfileContext = createContext<{displayName: string, avatar: string, theme: string}>({displayName: '', avatar: '', theme: 'dark'});
 
@@ -127,6 +128,7 @@ function App() {
                       {/* Links */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <Link to="/settings" onClick={() => setMenuOpen(false)} style={{ display: 'block', color: 'var(--text-primary)', textDecoration: 'none', padding: '10px 12px', borderRadius: '8px', transition: 'background 0.2s', fontSize: '0.95rem' }} onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}>👤 个人资料偏好</Link>
+                        <Link to="/knowledge" onClick={() => setMenuOpen(false)} style={{ display: 'block', color: 'var(--text-primary)', textDecoration: 'none', padding: '10px 12px', borderRadius: '8px', transition: 'background 0.2s', fontSize: '0.95rem' }} onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}>📚 知识库管理</Link>
                         <Link to="/tools" onClick={() => setMenuOpen(false)} style={{ display: 'block', color: 'var(--text-primary)', textDecoration: 'none', padding: '10px 12px', borderRadius: '8px', transition: 'background 0.2s', fontSize: '0.95rem' }} onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}>🔧 MCP 工具管理</Link>
                         
                         <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '8px 0' }} />
@@ -147,6 +149,7 @@ function App() {
             <Route path="/" element={ authRole ? <Home /> : <Navigate to="/login" /> } />
             <Route path="/editor/:id" element={ authRole ? <Editor /> : <Navigate to="/login" /> } />
             <Route path="/settings" element={ authRole ? <Settings /> : <Navigate to="/login" /> } />
+            <Route path="/knowledge" element={ authRole ? <KnowledgeBase /> : <Navigate to="/login" /> } />
             <Route path="/tools" element={ authRole ? <Tools /> : <Navigate to="/login" /> } />
             <Route path="/admin" element={ authRole === 'ADMIN' ? <AdminDashboard /> : <Navigate to="/" /> } />
           </Routes>
